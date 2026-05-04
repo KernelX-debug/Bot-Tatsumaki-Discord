@@ -25,8 +25,6 @@ DISCORD_TOKEN=tu_token_de_discord
 GROQ_API_KEY=tu_api_key_de_groq
 ```
  
-> ⚠️ Nunca subas este archivo a GitHub, agrega `.env` a tu `.gitignore`
- 
 ---
  
 ## Paso 3 — Crear archivo `index.js` con el código del bot
