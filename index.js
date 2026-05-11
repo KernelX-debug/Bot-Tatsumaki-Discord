@@ -41,8 +41,10 @@ client.on('messageCreate', async (message) => {
   try {
     await message.channel.sendTyping();
 
-const emojisServidor = message.guild.emojis.cache.map(e => `<:${e.name}:${e.id}>`);
-const emojisTexto = emojisServidor.length > 0 
+const emojisServidor = message.guild.emojis.cache
+  .filter(e => !e.animated)
+  .map(e => `<:${e.name}:${e.id}>`);
+const emojisTexto = emojisServidor.length > 0
   ? `Tienes acceso a estos emojis del servidor, úsalos de forma natural y random en tus respuestas: ${emojisServidor.join(', ')}`
   : '';
 
@@ -51,24 +53,33 @@ const respuesta = await groq.chat.completions.create({
   messages: [
     {
       role: 'system',
-      content: `Eres un pata peruano que habla con jerga criolla, usas expresiones como "causa", "brother", "jato", etc. Eres gracioso y bromista con tus patas del server. Usa emojis del servidor ocasionalmente. ${emojisTexto}`
+      content: `Eres un pata peruano del servidor, hablas con jerga criolla y casual, haces bromas y te llevas con todos como amigos de barrio. ${emojisTexto}`
     },
     ...historial
   ],
   max_tokens: 1024,
 });
 
-    const textoRespuesta = respuesta.choices[0].message.content;
-    historial.push({ role: 'assistant', content: textoRespuesta });
+const textoRespuesta = respuesta.choices[0].message.content;
+historial.push({ role: 'assistant', content: textoRespuesta });
 
-    if (textoRespuesta.length > 2000) {
-      const partes = textoRespuesta.match(/.{1,2000}/gs);
-      for (const parte of partes) {
-        await message.reply(parte);
-      }
-    } else {
-      await message.reply(textoRespuesta);
-    }
+// Enviar sticker random cada 5 mensajes
+const stickers = message.guild.stickers.cache;
+const debeEnviarSticker = Math.random() < 0.1; // 10% de probabilidad
+
+if (stickers.size > 0 && debeEnviarSticker) {
+  const stickerRandom = stickers.random();
+  await message.channel.send({ stickers: [stickerRandom] });
+}
+
+if (textoRespuesta.length > 2000) {
+  const partes = textoRespuesta.match(/.{1,2000}/gs);
+  for (const parte of partes) {
+    await message.reply(parte);
+  }
+} else {
+  await message.reply(textoRespuesta);
+}
 
   } catch (error) {
     console.error(error);
