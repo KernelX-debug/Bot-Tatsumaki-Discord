@@ -41,17 +41,22 @@ client.on('messageCreate', async (message) => {
   try {
     await message.channel.sendTyping();
 
-    const respuesta = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      messages: [
-        {
-          role: 'system',
-          content: 'Eres un asistente amigable en un servidor de Discord. Responde de forma natural y conversacional en el mismo idioma del usuario. Usa emojis ocasionalmente.'
-        },
-        ...historial
-      ],
-      max_tokens: 1024,
-    });
+const emojisServidor = message.guild.emojis.cache.map(e => `<:${e.name}:${e.id}>`);
+const emojisTexto = emojisServidor.length > 0 
+  ? `Tienes acceso a estos emojis del servidor, úsalos de forma natural y random en tus respuestas: ${emojisServidor.join(', ')}`
+  : '';
+
+const respuesta = await groq.chat.completions.create({
+  model: 'llama-3.1-8b-instant',
+  messages: [
+    {
+      role: 'system',
+      content: `Eres un pata peruano que habla con jerga criolla, usas expresiones como "causa", "brother", "jato", etc. Eres gracioso y bromista con tus patas del server. Usa emojis ocasionalmente. ${emojisTexto}`
+    },
+    ...historial
+  ],
+  max_tokens: 1024,
+});
 
     const textoRespuesta = respuesta.choices[0].message.content;
     historial.push({ role: 'assistant', content: textoRespuesta });
