@@ -209,7 +209,7 @@ Cuando un nuevo miembro se une al servidor, el bot envía un mensaje de bienveni
 - En la sección de `👋 BIENVENIDO AL COAR LIMA PROVINCIAS` eres libre de ubicar el mensaje de bienvenida que desees.
 - Si deseas una una asesoría personalizada del uso de esta herramienta puedes comunicarte con mi persona por el medio:
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img width="40px" src="https://i.pinimg.com/originals/1d/46/dd/1d46dda5b99cf1a91a1e2377fb948b36.gif" />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://kernelx-debug.github.io/"><img width="40px" src="https://i.pinimg.com/originals/1d/46/dd/1d46dda5b99cf1a91a1e2377fb948b36.gif" /></a>
 
 - Si estás viendo esto en su momento, feliz dia de la madre. Que la pases padre con tus familiares 🥳🥳
 
