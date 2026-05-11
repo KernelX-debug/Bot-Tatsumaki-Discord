@@ -207,7 +207,9 @@ Cuando un nuevo miembro se une al servidor, el bot envía un mensaje de bienveni
 - En el portal de Discord activa los permisos **"Message Content Intent"** y **"Server Members Intent"** en la sección **Bot → Privileged Gateway Intents**, de lo contrario el bot no podrá leer mensajes ni detectar nuevos miembros.
 - Reemplaza `ID_DEL_CANAL_BIENVENIDA` con el ID real de tu canal. Para obtenerlo activa el **Modo Desarrollador** en Discord (Ajustes → Avanzado) y haz clic derecho sobre el canal → **Copiar ID**.
 - En la sección de `👋 BIENVENIDO AL COAR LIMA PROVINCIAS` eres libre de ubicar el mensaje de bienvenida que desees.
-- Si deseas una una asesoría personalizada del uso de esta herramienta puedes comunicarte con mi persona por el medio: [<img align="left" alt="bilgehangecici.site" width="40px" src="https://i.pinimg.com/originals/1d/46/dd/1d46dda5b99cf1a91a1e2377fb948b36.gif" />][website]
+- Si deseas una una asesoría personalizada del uso de esta herramienta puedes comunicarte con mi persona por el medio:
+- 
+[<img align="left" alt="bilgehangecici.site" width="40px" src="https://i.pinimg.com/originals/1d/46/dd/1d46dda5b99cf1a91a1e2377fb948b36.gif" />][website]
 
 - Si estás viendo esto en su momento, feliz dia de la madre. Que la pases padre con tus familiares 🥳🥳
 
