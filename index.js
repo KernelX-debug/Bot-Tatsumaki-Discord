@@ -79,8 +79,7 @@ client.on('messageCreate', async (message) => {
     await message.channel.sendTyping();
 
     const emojisServidor = message.guild.emojis.cache
-      .filter(e => !e.animated)
-      .map(e => `<:${e.name}:${e.id}>`);
+  .map(e => e.animated ? `<a:${e.name}:${e.id}>` : `<:${e.name}:${e.id}>`);
     const emojisTexto = emojisServidor.length > 0
       ? `Tienes acceso a estos emojis del servidor, úsalos de forma natural y random en tus respuestas: ${emojisServidor.join(', ')}`
       : '';
