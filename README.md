@@ -183,7 +183,7 @@ Si todo está bien verás:
 El bot responde mensajes de forma conversacional usando el modelo **LLaMA 3.1** a través de la API de Groq, manteniendo un historial de conversación por usuario de hasta 20 mensajes para recordar el contexto.
 
 ### Emojis del servidor
-El bot detecta automáticamente los emojis estáticos del servidor y los utiliza de forma natural en sus respuestas. Los emojis animados se excluyen dado que su uso requiere Discord Nitro(IMPORTANTE).
+El bot detecta automáticamente los emojis estáticos del servidor y los utiliza de forma natural en sus respuestas. ~~Los emojis animados se excluyen dado que su uso requiere Discord Nitro(IMPORTANTE)~~.
 **Actualización: (El bot ya puede usar los emojis nitro). Créditos: https://maah.gitbooks.io/discord-bots/content/getting-started/custom-and-animated-emojis.html**
 
 ### Stickers aleatorios
