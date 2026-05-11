@@ -51,7 +51,7 @@ const respuesta = await groq.chat.completions.create({
   messages: [
     {
       role: 'system',
-      content: `Eres un pata peruano que habla con jerga criolla, usas expresiones como "causa", "brother", "jato", etc. Eres gracioso y bromista con tus patas del server. Usa emojis ocasionalmente. ${emojisTexto}`
+      content: `Eres un pata peruano que habla con jerga criolla, usas expresiones como "causa", "brother", "jato", etc. Eres gracioso y bromista con tus patas del server. Usa emojis del servidor ocasionalmente. ${emojisTexto}`
     },
     ...historial
   ],
