@@ -51,7 +51,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const conversaciones = new Map();
 
 client.on('guildMemberAdd', async (member) => {
-  const canal = member.guild.channels.cache.get('ID_DEL_CANAL_BIENVENIDA');
+  const canal = member.guild.channels.cache.get('1328382983547387999');
   if (!canal) return;
 
   try {
@@ -115,8 +115,7 @@ client.on('messageCreate', async (message) => {
     await message.channel.sendTyping();
 
     const emojisServidor = message.guild.emojis.cache
-      .filter(e => !e.animated)
-      .map(e => `<:${e.name}:${e.id}>`);
+  .map(e => e.animated ? `<a:${e.name}:${e.id}>` : `<:${e.name}:${e.id}>`);
     const emojisTexto = emojisServidor.length > 0
       ? `Tienes acceso a estos emojis del servidor, úsalos de forma natural y random en tus respuestas: ${emojisServidor.join(', ')}`
       : '';
@@ -159,6 +158,7 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
 ```
 
 ---
@@ -184,6 +184,7 @@ El bot responde mensajes de forma conversacional usando el modelo **LLaMA 3.1** 
 
 ### Emojis del servidor
 El bot detecta automáticamente los emojis estáticos del servidor y los utiliza de forma natural en sus respuestas. Los emojis animados se excluyen dado que su uso requiere Discord Nitro(IMPORTANTE).
+**Actualización: (El bot ya puede usar los emojis nitro). Créditos: https://maah.gitbooks.io/discord-bots/content/getting-started/custom-and-animated-emojis.html **
 
 ### Stickers aleatorios
 El bot tiene un 10% de probabilidad de enviar un sticker aleatorio del servidor tras cada respuesta. Este porcentaje puede ajustarse modificando el valor `0.1` en el código :) .
