@@ -166,6 +166,7 @@ client.login(process.env.DISCORD_TOKEN);
 ## Paso 4 — Ejecutar el bot
 
 ```bash
+cd mi-bot-discord
 node index.js
 ```
 
