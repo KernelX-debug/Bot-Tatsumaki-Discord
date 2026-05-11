@@ -209,7 +209,7 @@ Cuando un nuevo miembro se une al servidor, el bot envía un mensaje de bienveni
 - En la sección de `👋 BIENVENIDO AL COAR LIMA PROVINCIAS` eres libre de ubicar el mensaje de bienvenida que desees.
 - Si deseas una una asesoría personalizada del uso de esta herramienta puedes comunicarte con mi persona por el medio:
 
-<table>
+<table border="0" cellspacing="0">
   <tr>
     <td width="60"></td>
     <td>
