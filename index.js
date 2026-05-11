@@ -15,7 +15,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const conversaciones = new Map();
 
 client.on('guildMemberAdd', async (member) => {
-  const canal = member.guild.channels.cache.get('ID_DEL_CANAL_BIENVENIDA');
+  const canal = member.guild.channels.cache.get('1328382983547387999');
   if (!canal) return;
 
   try {
