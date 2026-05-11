@@ -211,12 +211,12 @@ Cuando un nuevo miembro se une al servidor, el bot envía un mensaje de bienveni
 
 [<img align="left" alt="bilgehangecici.site" width="40px" src="https://i.pinimg.com/originals/1d/46/dd/1d46dda5b99cf1a91a1e2377fb948b36.gif" />][website]
 
-[website]: https://kernelx-debug.github.io/
 - Si estás viendo esto en su momento, feliz dia de la madre. Que la pases padre con tus familiares 🥳🥳
 
 ![Demo del bot](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExemIxYXk3NWdqZGJuaGVxMzkweXM2ZHRid291ZGxzM2J5ejI1MjlzZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/OuQmhmAAdJFLi/giphy.gif)
 
 ---
+[website]: https://kernelx-debug.github.io/
 
 ## ☁️ Hosting gratuito 24/7
 
