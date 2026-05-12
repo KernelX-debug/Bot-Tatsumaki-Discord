@@ -62,7 +62,7 @@ const WELCOME_CHANNEL_ID = '1328382983547387999';
 const BOT_PREFIX = '!';
 const CHAT_MODEL = 'llama-3.1-8b-instant';
 const TTS_MODEL = 'canopylabs/orpheus-v1-english';
-const TTS_VOICE = 'hannah';
+const TTS_VOICE = 'diana';
 const MAX_TTS_CHARS = 200;
 
 if (!DISCORD_TOKEN) {
@@ -285,7 +285,7 @@ async function synthesizeSpeechToBuffer(text) {
     const response = await groq.audio.speech.create({
       model: TTS_MODEL,
       voice: TTS_VOICE,
-      input: text,
+      input: `[casual] ${text}`,
       response_format: 'wav',
       sample_rate: 48000,
     });
