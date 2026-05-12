@@ -274,7 +274,7 @@ async function createPcmResourceFromWavBuffer(wavBuffer) {
     pcmBuffer.writeInt16LE(Math.round(rightInt), (i * 4) + 2);
   }
 
-  return createAudioResource(Readable.from(pcmBuffer), {
+  return createAudioResource(Readable.from([pcmBuffer]), {
     inputType: StreamType.Raw,
   });
 }
@@ -434,3 +434,4 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(DISCORD_TOKEN);
+
