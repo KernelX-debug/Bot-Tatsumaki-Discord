@@ -36,7 +36,7 @@ GROQ_API_KEY=tu_api_key_de_groq
 ```javascript
 require('dotenv').config();
 
-const { Readable } = require('node:stream');
+const { PassThrough } = require('node:stream');
 const {
   Client,
   GatewayIntentBits,
@@ -237,6 +237,9 @@ async function joinMemberVoiceChannel(member) {
     });
 
     connection.subscribe(player);
+    player.on('error', (error) => {
+      console.error('Error del reproductor de voz:', error);
+    });
 
     session = {
       connection,
@@ -278,15 +281,23 @@ function leaveGuildVoice(guildId) {
 }
 
 async function synthesizeSpeechToBuffer(text) {
-  const response = await groq.audio.speech.create({
-    model: TTS_MODEL,
-    voice: TTS_VOICE,
-    input: text,
-    response_format: 'wav',
-    sample_rate: 48000,
-  });
+  try {
+    const response = await groq.audio.speech.create({
+      model: TTS_MODEL,
+      voice: TTS_VOICE,
+      input: text,
+      response_format: 'wav',
+      sample_rate: 48000,
+    });
 
-  return Buffer.from(await response.arrayBuffer());
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    if (typeof error?.message === 'string' && error.message.includes('model_terms_required')) {
+      throw new Error(`Groq bloqueo la voz porque todavia no aceptaste los terminos del modelo ${TTS_MODEL}. Entra a https://console.groq.com/playground?model=${encodeURIComponent(TTS_MODEL)} y aceptalos.`);
+    }
+
+    throw error;
+  }
 }
 
 async function createPcmResourceFromWavBuffer(wavBuffer) {
@@ -310,7 +321,10 @@ async function createPcmResourceFromWavBuffer(wavBuffer) {
     pcmBuffer.writeInt16LE(Math.round(rightInt), (i * 4) + 2);
   }
 
-  return createAudioResource(Readable.from(pcmBuffer), {
+  const stream = new PassThrough();
+  stream.end(pcmBuffer);
+
+  return createAudioResource(stream, {
     inputType: StreamType.Raw,
   });
 }
@@ -319,7 +333,13 @@ async function playSpeechChunk(session, textChunk) {
   const wavBuffer = await synthesizeSpeechToBuffer(textChunk);
   const resource = await createPcmResourceFromWavBuffer(wavBuffer);
   session.player.play(resource);
-  await entersState(session.player, AudioPlayerStatus.Playing, 20_000);
+
+  try {
+    await entersState(session.player, AudioPlayerStatus.Playing, 20_000);
+  } catch (error) {
+    throw new Error(`No se pudo empezar a reproducir el audio. Estado actual del player: ${session.player.state.status}`);
+  }
+
   await entersState(session.player, AudioPlayerStatus.Idle, 60_000);
 }
 
@@ -470,6 +490,7 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(DISCORD_TOKEN);
+
 ```
 
 ---
