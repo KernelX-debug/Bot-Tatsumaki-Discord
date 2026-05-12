@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { Readable } = require('node:stream');
+const { PassThrough } = require('node:stream');
 const {
   Client,
   GatewayIntentBits,
@@ -201,6 +201,9 @@ async function joinMemberVoiceChannel(member) {
     });
 
     connection.subscribe(player);
+    player.on('error', (error) => {
+      console.error('Error del reproductor de voz:', error);
+    });
 
     session = {
       connection,
@@ -274,7 +277,10 @@ async function createPcmResourceFromWavBuffer(wavBuffer) {
     pcmBuffer.writeInt16LE(Math.round(rightInt), (i * 4) + 2);
   }
 
-  return createAudioResource(Readable.from([pcmBuffer]), {
+  const stream = new PassThrough();
+  stream.end(pcmBuffer);
+
+  return createAudioResource(stream, {
     inputType: StreamType.Raw,
   });
 }
@@ -283,7 +289,13 @@ async function playSpeechChunk(session, textChunk) {
   const wavBuffer = await synthesizeSpeechToBuffer(textChunk);
   const resource = await createPcmResourceFromWavBuffer(wavBuffer);
   session.player.play(resource);
-  await entersState(session.player, AudioPlayerStatus.Playing, 20_000);
+
+  try {
+    await entersState(session.player, AudioPlayerStatus.Playing, 20_000);
+  } catch (error) {
+    throw new Error(`No se pudo empezar a reproducir el audio. Estado actual del player: ${session.player.state.status}`);
+  }
+
   await entersState(session.player, AudioPlayerStatus.Idle, 60_000);
 }
 
@@ -434,4 +446,3 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(DISCORD_TOKEN);
-
