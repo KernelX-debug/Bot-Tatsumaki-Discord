@@ -245,15 +245,23 @@ function leaveGuildVoice(guildId) {
 }
 
 async function synthesizeSpeechToBuffer(text) {
-  const response = await groq.audio.speech.create({
-    model: TTS_MODEL,
-    voice: TTS_VOICE,
-    input: text,
-    response_format: 'wav',
-    sample_rate: 48000,
-  });
+  try {
+    const response = await groq.audio.speech.create({
+      model: TTS_MODEL,
+      voice: TTS_VOICE,
+      input: text,
+      response_format: 'wav',
+      sample_rate: 48000,
+    });
 
-  return Buffer.from(await response.arrayBuffer());
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    if (typeof error?.message === 'string' && error.message.includes('model_terms_required')) {
+      throw new Error(`Groq bloqueo la voz porque todavia no aceptaste los terminos del modelo ${TTS_MODEL}. Entra a https://console.groq.com/playground?model=${encodeURIComponent(TTS_MODEL)} y aceptalos.`);
+    }
+
+    throw error;
+  }
 }
 
 async function createPcmResourceFromWavBuffer(wavBuffer) {
