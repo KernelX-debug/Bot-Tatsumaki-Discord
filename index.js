@@ -2,10 +2,12 @@ require('dotenv').config();
 
 const { PassThrough } = require('node:stream');
 const {
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
   ChannelType,
+  Client,
+  EmbedBuilder,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
 } = require('discord.js');
 const {
   AudioPlayerStatus,
@@ -22,7 +24,9 @@ const WavDecoder = require('wav-decoder');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const WELCOME_CHANNEL_ID = '1328382983547387999';
+const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID || '1328382983547387999';
+const SAY_GUILD_ID = process.env.SAY_GUILD_ID || process.env.DISCORD_GUILD_ID || process.env.GUILD_ID;
+const SAY_CHANNEL_ID = process.env.SAY_CHANNEL_ID || WELCOME_CHANNEL_ID;
 const BOT_PREFIX = '!';
 const CHAT_MODEL = 'llama-3.1-8b-instant';
 const TTS_MODEL = 'canopylabs/orpheus-v1-english';
@@ -46,6 +50,17 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
   ],
 });
+
+const sayCommand = new SlashCommandBuilder()
+  .setName('say')
+  .setDescription('Envia un mensaje como el bot en el canal configurado.')
+  .setDMPermission(false)
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+  .addStringOption((option) => option
+    .setName('texto')
+    .setDescription('Texto que enviara el bot.')
+    .setRequired(true)
+    .setMaxLength(2000));
 
 const groq = new Groq({ apiKey: GROQ_API_KEY });
 const conversaciones = new Map();
@@ -337,6 +352,59 @@ async function replyLongMessage(message, text) {
   }
 }
 
+async function registerGuildSlashCommands() {
+  if (!SAY_GUILD_ID) {
+    console.warn('No se registro /say porque falta SAY_GUILD_ID en el .env');
+    return;
+  }
+
+  const guild = await client.guilds.fetch(SAY_GUILD_ID);
+  await guild.commands.set([sayCommand]);
+  console.log(`Comando /say registrado en el servidor ${guild.name}`);
+}
+
+async function handleSayCommand(interaction) {
+  if (interaction.guildId !== SAY_GUILD_ID) {
+    await interaction.reply({
+      content: 'Este comando solo esta habilitado en el servidor configurado.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+    await interaction.reply({
+      content: 'Necesitas el permiso Manage Messages para usar este comando.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const textToSend = interaction.options.getString('texto', true).trim();
+  const targetChannel = await interaction.guild.channels.fetch(SAY_CHANNEL_ID).catch(() => null);
+
+  if (!targetChannel || !targetChannel.isTextBased()) {
+    await interaction.reply({
+      content: 'No encontre el canal configurado para /say. Revisa SAY_CHANNEL_ID en el .env.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await targetChannel.send({
+    content: textToSend,
+    allowedMentions: {
+      parse: ['users', 'roles'],
+      repliedUser: false,
+    },
+  });
+
+  await interaction.reply({
+    content: `Mensaje enviado en ${targetChannel}.`,
+    ephemeral: true,
+  });
+}
+
 client.on('guildMemberAdd', async (member) => {
   const canal = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
   if (!canal || !canal.isTextBased()) {
@@ -368,7 +436,7 @@ client.on('guildMemberAdd', async (member) => {
     const avatarURL = member.user.displayAvatarURL({ size: 256, extension: 'png' });
 
     const embed = new EmbedBuilder()
-      .setTitle('👋 BIENVENIDO AL COAR LIMA PROVINCIAS')
+      .setTitle('BIENVENIDO AL COAR LIMA PROVINCIAS')
       .setDescription(textoRespuesta)
       .setThumbnail(avatarURL)
       .setColor(0x00bfff)
@@ -381,8 +449,39 @@ client.on('guildMemberAdd', async (member) => {
   }
 });
 
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
   console.log(`Bot conectado como ${client.user.tag}`);
+
+  try {
+    await registerGuildSlashCommands();
+  } catch (error) {
+    console.error('Error registrando comandos slash:', error);
+  }
+});
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) {
+    return;
+  }
+
+  try {
+    if (interaction.commandName === 'say') {
+      await handleSayCommand(interaction);
+    }
+  } catch (error) {
+    console.error('Error en comando slash:', error);
+
+    const response = {
+      content: `Hubo un error: ${error.message}`,
+      ephemeral: true,
+    };
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp(response);
+    } else {
+      await interaction.reply(response);
+    }
+  }
 });
 
 client.on('messageCreate', async (message) => {
@@ -427,7 +526,7 @@ client.on('messageCreate', async (message) => {
     const texto = sanitizeMention(content);
 
     if (!texto) {
-      await message.reply('¡Hola! ¿En qué te puedo ayudar? 😊');
+      await message.reply('Hola! En que te puedo ayudar?');
       return;
     }
 
