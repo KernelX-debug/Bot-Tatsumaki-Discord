@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+const { spawn } = require('node:child_process');
+const { constants: FsConstants } = require('node:fs');
+const { access, mkdir } = require('node:fs/promises');
+const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const {
   ChannelType,
@@ -19,8 +23,10 @@ const {
   entersState,
   joinVoiceChannel,
 } = require('@discordjs/voice');
+const ffmpeg = require('@ffmpeg-installer/ffmpeg');
 const Groq = require('groq-sdk');
 const WavDecoder = require('wav-decoder');
+const { default: YTDlpWrap } = require('yt-dlp-wrap');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -32,13 +38,18 @@ const CHAT_MODEL = 'llama-3.1-8b-instant';
 const TTS_MODEL = 'canopylabs/orpheus-v1-english';
 const TTS_VOICE = 'diana';
 const MAX_TTS_CHARS = 200;
+const YTDLP_BINARY_PATH = process.env.YT_DLP_PATH || path.join(
+  __dirname,
+  'bin',
+  process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+);
 
 if (!DISCORD_TOKEN) {
   throw new Error('Falta DISCORD_TOKEN en el archivo .env');
 }
 
 if (!GROQ_API_KEY) {
-  throw new Error('Falta GROQ_API_KEY en el archivo .env');
+  console.warn('Falta GROQ_API_KEY en el archivo .env. La IA y el TTS quedan desactivados, pero el bot y la musica pueden funcionar.');
 }
 
 const client = new Client({
@@ -62,9 +73,17 @@ const sayCommand = new SlashCommandBuilder()
     .setRequired(true)
     .setMaxLength(2000));
 
-const groq = new Groq({ apiKey: GROQ_API_KEY });
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
+const ytDlp = new YTDlpWrap(YTDLP_BINARY_PATH);
+let ytDlpReady = null;
 const conversaciones = new Map();
 const voiceSessions = new Map();
+
+function ensureGroqAvailable(featureName = 'Esta funcion') {
+  if (!groq) {
+    throw new Error(`${featureName} necesita GROQ_API_KEY en el archivo .env.`);
+  }
+}
 
 function getConversationHistory(userId) {
   if (!conversaciones.has(userId)) {
@@ -153,6 +172,8 @@ function buildSystemPrompt(guild) {
 }
 
 async function createGroqReply(message, userText) {
+  ensureGroqAvailable('La IA');
+
   const historial = getConversationHistory(message.author.id);
   historial.push({ role: 'user', content: userText });
 
@@ -185,6 +206,40 @@ async function createGroqReply(message, userText) {
 
 function getVoiceSession(guildId) {
   return voiceSessions.get(guildId) || null;
+}
+
+async function fileExists(filePath) {
+  try {
+    await access(filePath, FsConstants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureYtDlpBinary() {
+  if (!ytDlpReady) {
+    ytDlpReady = (async () => {
+      if (await fileExists(YTDLP_BINARY_PATH)) {
+        return;
+      }
+
+      await mkdir(path.dirname(YTDLP_BINARY_PATH), { recursive: true });
+      console.log(`Descargando yt-dlp en ${YTDLP_BINARY_PATH}...`);
+      await YTDlpWrap.downloadFromGithub(YTDLP_BINARY_PATH);
+      console.log('yt-dlp listo para reproducir musica.');
+    })();
+  }
+
+  await ytDlpReady;
+}
+
+async function runYtDlp(args) {
+  await ensureYtDlpBinary();
+  return ytDlp.execPromise(args, {
+    windowsHide: true,
+    maxBuffer: 1024 * 1024 * 20,
+  });
 }
 
 async function joinMemberVoiceChannel(member) {
@@ -225,6 +280,11 @@ async function joinMemberVoiceChannel(member) {
       player,
       queue: Promise.resolve(),
       channelId: voiceChannel.id,
+      musicQueue: [],
+      musicLoop: null,
+      nowPlaying: null,
+      isMusicPlaying: false,
+      ffmpegProcess: null,
     };
 
     connection.on('stateChange', (_, newState) => {
@@ -253,13 +313,246 @@ function leaveGuildVoice(guildId) {
     return false;
   }
 
+  session.musicQueue.length = 0;
+  cleanupMusicProcess(session);
   session.player.stop(true);
   session.connection.destroy();
   voiceSessions.delete(guildId);
   return true;
 }
 
+function hasActiveMusic(session) {
+  return Boolean(session?.musicLoop || session?.isMusicPlaying || session?.nowPlaying || session?.musicQueue?.length);
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return '?:??';
+  }
+
+  const totalSeconds = Math.round(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const rest = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}:${rest}`;
+}
+
+function cleanupMusicProcess(session) {
+  if (!session?.ffmpegProcess) {
+    return;
+  }
+
+  if (!session.ffmpegProcess.killed) {
+    session.ffmpegProcess.kill('SIGKILL');
+  }
+
+  session.ffmpegProcess = null;
+}
+
+async function searchSong(query, requestedBy) {
+  const stdout = await runYtDlp([
+    '--dump-single-json',
+    '--default-search',
+    'ytsearch1',
+    '--format',
+    'bestaudio/best',
+    '--no-playlist',
+    '--no-warnings',
+    '--quiet',
+    query,
+  ]);
+
+  const info = JSON.parse(stdout);
+  const song = Array.isArray(info.entries) ? info.entries.find(Boolean) : info;
+
+  if (!song) {
+    return null;
+  }
+
+  const webpageUrl = song.webpage_url || song.original_url || song.url;
+  if (!webpageUrl) {
+    return null;
+  }
+
+  return {
+    title: song.title || query,
+    webpageUrl,
+    duration: Number.isFinite(song.duration) ? song.duration : null,
+    requestedBy,
+  };
+}
+
+async function getSongStreamUrl(song) {
+  const stdout = await runYtDlp([
+    '--get-url',
+    '--format',
+    'bestaudio/best',
+    '--no-playlist',
+    '--no-warnings',
+    '--quiet',
+    song.webpageUrl,
+  ]);
+
+  const urls = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return urls.at(-1) || null;
+}
+
+function createMusicResource(session, audioUrl) {
+  cleanupMusicProcess(session);
+
+  const ffmpegProcess = spawn(ffmpeg.path, [
+    '-nostdin',
+    '-reconnect',
+    '1',
+    '-reconnect_streamed',
+    '1',
+    '-reconnect_delay_max',
+    '5',
+    '-i',
+    audioUrl,
+    '-analyzeduration',
+    '0',
+    '-loglevel',
+    'warning',
+    '-f',
+    's16le',
+    '-ar',
+    '48000',
+    '-ac',
+    '2',
+    'pipe:1',
+  ], {
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  session.ffmpegProcess = ffmpegProcess;
+
+  let stderr = '';
+  ffmpegProcess.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+    if (stderr.length > 4000) {
+      stderr = stderr.slice(-4000);
+    }
+  });
+
+  ffmpegProcess.on('close', (code) => {
+    if (code && code !== 255) {
+      console.warn(`FFmpeg termino con codigo ${code}: ${stderr.trim()}`);
+    }
+  });
+
+  return createAudioResource(ffmpegProcess.stdout, {
+    inputType: StreamType.Raw,
+  });
+}
+
+function waitForPlayerIdle(player) {
+  return new Promise((resolve, reject) => {
+    const onIdle = () => {
+      cleanup();
+      resolve();
+    };
+
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+
+    const cleanup = () => {
+      player.off(AudioPlayerStatus.Idle, onIdle);
+      player.off('error', onError);
+    };
+
+    player.once(AudioPlayerStatus.Idle, onIdle);
+    player.once('error', onError);
+  });
+}
+
+async function playMusicSong(session, song) {
+  const audioUrl = await getSongStreamUrl(song);
+  if (!audioUrl) {
+    throw new Error('No pude obtener el enlace de audio.');
+  }
+
+  const resource = createMusicResource(session, audioUrl);
+  session.nowPlaying = song;
+  session.isMusicPlaying = true;
+  session.player.play(resource);
+
+  await entersState(session.player, AudioPlayerStatus.Playing, 20_000);
+  await waitForPlayerIdle(session.player);
+}
+
+function startMusicLoop(session, textChannel) {
+  if (session.musicLoop) {
+    return;
+  }
+
+  session.musicLoop = (async () => {
+    while (session.musicQueue.length > 0) {
+      const song = session.musicQueue.shift();
+
+      try {
+        await textChannel.send(`Reproduciendo: **${song.title}** (${formatDuration(song.duration)})`);
+        await playMusicSong(session, song);
+      } catch (error) {
+        console.error('Error reproduciendo musica:', error);
+        await textChannel.send(`No pude reproducir **${song.title}**: ${error.message}`);
+      } finally {
+        cleanupMusicProcess(session);
+        session.nowPlaying = null;
+        session.isMusicPlaying = false;
+      }
+    }
+  })().catch((error) => {
+    console.error('Error en la cola de musica:', error);
+  }).finally(() => {
+    cleanupMusicProcess(session);
+    session.musicLoop = null;
+    session.nowPlaying = null;
+    session.isMusicPlaying = false;
+  });
+}
+
+function buildQueueMessage(session) {
+  const lines = [];
+
+  if (session.nowPlaying) {
+    lines.push(`Ahora: **${session.nowPlaying.title}** (${formatDuration(session.nowPlaying.duration)})`);
+  }
+
+  if (session.musicQueue.length === 0) {
+    lines.push('Cola vacia.');
+  } else {
+    lines.push('Cola:');
+    for (const [index, song] of session.musicQueue.slice(0, 10).entries()) {
+      lines.push(`${index + 1}. ${song.title} (${formatDuration(song.duration)})`);
+    }
+
+    if (session.musicQueue.length > 10) {
+      lines.push(`...y ${session.musicQueue.length - 10} mas.`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function stopMusic(session, clearQueue = false) {
+  if (clearQueue) {
+    session.musicQueue.length = 0;
+  }
+
+  cleanupMusicProcess(session);
+  session.player.stop(true);
+}
+
 async function synthesizeSpeechToBuffer(text) {
+  ensureGroqAvailable('El TTS');
+
   try {
     const response = await groq.audio.speech.create({
       model: TTS_MODEL,
@@ -323,6 +616,10 @@ async function playSpeechChunk(session, textChunk) {
 }
 
 async function speakInVoice(session, text) {
+  if (hasActiveMusic(session)) {
+    throw new Error('Estoy reproduciendo musica. Usa !stop o espera a que termine antes de usar voz TTS.');
+  }
+
   const chunks = splitForTts(text);
 
   if (chunks.length === 0) {
@@ -412,25 +709,26 @@ client.on('guildMemberAdd', async (member) => {
   }
 
   try {
-    const respuesta = await groq.chat.completions.create({
-      model: CHAT_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'Eres un pata peruano del servidor, hablas con jerga criolla y casual. Genera un mensaje de bienvenida corto, divertido y con jerga de barrio para un nuevo miembro.',
-        },
-        {
-          role: 'user',
-          content: `Dale bienvenida a ${member.user.username} al servidor`,
-        },
-      ],
-      max_tokens: 200,
-      temperature: 0.9,
-    });
+    let textoRespuesta = `Bienvenido ${member.user.username} al servidor. Ponte comodo y pasa la voz.`;
 
-    const textoRespuesta = respuesta.choices?.[0]?.message?.content?.trim();
-    if (!textoRespuesta) {
-      return;
+    if (groq) {
+      const respuesta = await groq.chat.completions.create({
+        model: CHAT_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: 'Eres un pata peruano del servidor, hablas con jerga criolla y casual. Genera un mensaje de bienvenida corto, divertido y con jerga de barrio para un nuevo miembro.',
+          },
+          {
+            role: 'user',
+            content: `Dale bienvenida a ${member.user.username} al servidor`,
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.9,
+      });
+
+      textoRespuesta = respuesta.choices?.[0]?.message?.content?.trim() || textoRespuesta;
     }
 
     const avatarURL = member.user.displayAvatarURL({ size: 256, extension: 'png' });
@@ -506,6 +804,60 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    if (lower.startsWith(`${BOT_PREFIX}play `) || lower.startsWith(`${BOT_PREFIX}p `)) {
+      const usedPrefix = lower.startsWith(`${BOT_PREFIX}play `) ? `${BOT_PREFIX}play ` : `${BOT_PREFIX}p `;
+      const query = content.slice(usedPrefix.length).trim();
+
+      if (!query) {
+        await message.reply(`Usa \`${BOT_PREFIX}play nombre o enlace\``);
+        return;
+      }
+
+      const session = await joinMemberVoiceChannel(message.member);
+      await message.reply(`Buscando: **${query}**...`);
+
+      const song = await searchSong(query, message.author.id);
+      if (!song) {
+        await message.reply('No encontre resultados.');
+        return;
+      }
+
+      session.musicQueue.push(song);
+      await message.reply(`Anadido a la cola: **${song.title}** (${formatDuration(song.duration)})`);
+      startMusicLoop(session, message.channel);
+      return;
+    }
+
+    if (lower === `${BOT_PREFIX}queue` || lower === `${BOT_PREFIX}cola`) {
+      const session = getVoiceSession(message.guild.id);
+      await message.reply(session ? buildQueueMessage(session) : 'No hay musica en cola.');
+      return;
+    }
+
+    if (lower === `${BOT_PREFIX}skip`) {
+      const session = getVoiceSession(message.guild.id);
+      if (!session || !session.nowPlaying) {
+        await message.reply('No hay musica reproduciendose.');
+        return;
+      }
+
+      stopMusic(session, false);
+      await message.reply('Cancion omitida.');
+      return;
+    }
+
+    if (lower === `${BOT_PREFIX}stop`) {
+      const session = getVoiceSession(message.guild.id);
+      if (!session || !hasActiveMusic(session)) {
+        await message.reply('No hay musica para detener.');
+        return;
+      }
+
+      stopMusic(session, true);
+      await message.reply('Musica detenida y cola vaciada.');
+      return;
+    }
+
     if (lower.startsWith(`${BOT_PREFIX}say `)) {
       const textToSpeak = content.slice(`${BOT_PREFIX}say `.length).trim();
       if (!textToSpeak) {
@@ -514,6 +866,11 @@ client.on('messageCreate', async (message) => {
       }
 
       const session = await joinMemberVoiceChannel(message.member);
+      if (hasActiveMusic(session)) {
+        await message.reply('Estoy reproduciendo musica. Usa `!stop` o espera a que termine antes de usar voz TTS.');
+        return;
+      }
+
       await message.reply('Ya fue, lo digo en voz.');
       await speakInVoice(session, textToSpeak);
       return;
@@ -527,6 +884,11 @@ client.on('messageCreate', async (message) => {
 
     if (!texto) {
       await message.reply('Hola! En que te puedo ayudar?');
+      return;
+    }
+
+    if (!groq) {
+      await message.reply('La IA esta desactivada porque falta GROQ_API_KEY en el .env, pero los comandos de musica siguen funcionando.');
       return;
     }
 
@@ -544,7 +906,9 @@ client.on('messageCreate', async (message) => {
 
     if (message.member.voice.channel) {
       const session = await joinMemberVoiceChannel(message.member);
-      await speakInVoice(session, textoRespuesta);
+      if (!hasActiveMusic(session)) {
+        await speakInVoice(session, textoRespuesta);
+      }
     }
   } catch (error) {
     console.error('Error general:', error);
