@@ -1,0 +1,11 @@
+providers = ["...", "python"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
+NIXPACKS_PYTHON_VERSION = "3.12"
+
+[phases.setup]
+nixPkgs = ["...", "python312"]
+
+[start]
+cmd = "npm start"
