@@ -1163,7 +1163,7 @@ Si todo está bien verás:
 ## ✨ Funcionalidades [Discord](https://img.shields.io/badge/-Discord-5865F2?style=flat-square&logo=discord&logoColor=ffffff)
 
 ### Respuestas con IA
-El bot responde mensajes de forma conversacional usando el modelo **LLaMA 3.1** a través de la API de Groq, manteniendo un historial de conversación por usuario de hasta 20 mensajes para recordar el contexto. Cabe recalcar que puedes cambiar el modelo de groq, en este caso el que se usa es el modelo disponible gratuitamente.
+El bot responde mensajes de forma conversacional usando el modelo **openai/gpt-oss-20b** a través de la API de Groq, manteniendo un historial de conversación por usuario de hasta 20 mensajes para recordar el contexto. Cabe recalcar que puedes cambiar el modelo de groq, en este caso el que se usa es el modelo disponible gratuitamente.
 
 ### Emojis del servidor
 El bot detecta automáticamente los emojis estáticos del servidor y los utiliza de forma natural en sus respuestas.  ~~Los emojis animados se excluyen dado que su uso requiere Discord Nitro(IMPORTANTE)~~. **Actualización: (El bot ya puede usar los emojis nitro). Créditos: https://maah.gitbooks.io/discord-bots/content/getting-started/custom-and-animated-emojis.html**
